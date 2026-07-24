@@ -22,7 +22,7 @@
 
 import numpy as np
 import spatialmath as sm
-import cv2
+import cv2 as cv
 
 
 # ====================================================================================
