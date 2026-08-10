@@ -23,6 +23,7 @@
 import numpy as np
 import spatialmath as sm
 import cv2 as cv
+import pandas as pd
 
 
 # ====================================================================================
@@ -104,6 +105,25 @@ def match_features(img_i: np.ndarray, img_j: np.ndarray):
     #      match_id,u_i,v_i,u_j,v_j
     # ====================================================================================
 
+    sift = cv2.SIFT_create(nfeatures=MAX_POINTS)
+    sift_i_keypoints, sift_i_descriptors = sift.detectAndCompute(img_i, None)
+    sift_j_keypoints, sift_j_descriptors = sift.detectAndCompute(img_j, None)
+
+    matcher = cv2.BFMatcher(cv2.NORM_L2)
+    nearest_matches = matcher.knnMatch(sift_i_descriptors, sift_j_descriptors, k=2) # return 2 matches per point instead of 1 for ratio test
+    # Conduct ratio test to refine matches
+    ratio_matches = []
+    for (best, second_best) in nearest_pairs:         
+        if best.distance < 0.85 * second_best.distance:
+            ratio_matches.append(best)
+    
+        ratio_matches = sorted(
+            ratio_matches, key=lambda match: match.distance
+        )
+    # Initialize CSV to be appended later
+    headers = ["match_id", "u_i", "v_i", "u_j", "v_j"]
+    df = pd.DataFrame(columns=headers)
+    df.to_csv("results_matches.csv", index=False)
     return None
 
 
