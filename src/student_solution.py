@@ -24,6 +24,7 @@ import numpy as np
 import spatialmath as sm
 import cv2 as cv
 import pandas as pd
+import csv
 
 
 # ====================================================================================
@@ -104,26 +105,32 @@ def match_features(img_i: np.ndarray, img_j: np.ndarray):
     #   5. Write results_matches.csv with columns:
     #      match_id,u_i,v_i,u_j,v_j
     # ====================================================================================
-
-    sift = cv2.SIFT_create(nfeatures=MAX_POINTS)
+    MAX_POINTS = 500
+    sift = cv.SIFT_create(nfeatures=MAX_POINTS)
     sift_i_keypoints, sift_i_descriptors = sift.detectAndCompute(img_i, None)
     sift_j_keypoints, sift_j_descriptors = sift.detectAndCompute(img_j, None)
 
-    matcher = cv2.BFMatcher(cv2.NORM_L2)
+    matcher = cv.BFMatcher(cv.NORM_L2)
     nearest_matches = matcher.knnMatch(sift_i_descriptors, sift_j_descriptors, k=2) # return 2 matches per point instead of 1 for ratio test
     # Conduct ratio test to refine matches
     ratio_matches = []
-    for (best, second_best) in nearest_pairs:         
+    for (best, second_best) in nearest_matches:         
         if best.distance < 0.85 * second_best.distance:
             ratio_matches.append(best)
     
         ratio_matches = sorted(
             ratio_matches, key=lambda match: match.distance
         )
-    # Initialize CSV to be appended later
+    # Initialize df to be turned into a CSV later
     headers = ["match_id", "u_i", "v_i", "u_j", "v_j"]
-    df = pd.DataFrame(columns=headers)
-    df.to_csv("results_matches.csv", index=False)
+    with open("results_matches.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for match_id, m in enumerate(ratio_matches):
+            u_i, v_i = sift_i_keypoints[m.queryIdx].pt
+            u_j, v_j = sift_j_keypoints[m.trainIdx].pt
+            writer.writerow([match_id, u_i, v_i, u_j, v_j])
+    
     return None
 
 

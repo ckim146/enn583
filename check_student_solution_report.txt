@@ -1,0 +1,247 @@
+Using solution module: student_solution
+Loading KITTI data...
+Loaded sequence: 2011_09_26_drive_0035
+Number of frames: 131
+Example image frames: 0 and 1
+Selected checks: match_features, estimate_relative_pose, visual_odometry
+Using these frame pairs for the selected pair-based check(s):
+    3->4, 22->23, 23->24, 48->49, 72->73, 80->81, 85->86, 95->96, 113->114, 115->116
+Frame skip: 1
+Random seed: 0
+Image 0 shape: (375, 1242, 3)
+Image 1 shape: (375, 1242, 3)
+
+This checker does not assign marks.
+It shows whether your functions run and whether the CSV files look right.
+
+================================================================================
+Checking match_features(img_i, img_j)
+================================================================================
+ℹ️  INFO Checking 10 randomly selected frame pair(s).
+
+ℹ️  INFO Pair 1/10: 3 -> 4
+✅ PASS match_features() ran without errors.
+ℹ️  INFO Runtime: 0.142 seconds
+✅ PASS Found results_matches.csv.
+✅ PASS results_matches.csv has the expected header.
+✅ PASS results_matches.csv contains 278 match row(s).
+✅ PASS Match rows have sequential IDs and numeric coordinates.
+ℹ️  INFO Match geometry against trusted KITTI epipolar geometry:
+       Median Sampson error: 0.143 px
+       Mean Sampson error: 3.881 px
+       Matches below 1 px: 90.3%
+       Matches below 2 px: 92.1%
+       Matches below 5 px: 93.9%
+
+ℹ️  INFO Pair 2/10: 22 -> 23
+✅ PASS match_features() ran without errors.
+ℹ️  INFO Runtime: 0.094 seconds
+✅ PASS Found results_matches.csv.
+✅ PASS results_matches.csv has the expected header.
+✅ PASS results_matches.csv contains 318 match row(s).
+✅ PASS Match rows have sequential IDs and numeric coordinates.
+ℹ️  INFO Match geometry against trusted KITTI epipolar geometry:
+       Median Sampson error: 0.106 px
+       Mean Sampson error: 3.732 px
+       Matches below 1 px: 94.0%
+       Matches below 2 px: 94.3%
+       Matches below 5 px: 95.3%
+
+ℹ️  INFO Pair 3/10: 23 -> 24
+✅ PASS match_features() ran without errors.
+ℹ️  INFO Runtime: 0.083 seconds
+✅ PASS Found results_matches.csv.
+✅ PASS results_matches.csv has the expected header.
+✅ PASS results_matches.csv contains 303 match row(s).
+✅ PASS Match rows have sequential IDs and numeric coordinates.
+ℹ️  INFO Match geometry against trusted KITTI epipolar geometry:
+       Median Sampson error: 0.111 px
+       Mean Sampson error: 2.901 px
+       Matches below 1 px: 93.7%
+       Matches below 2 px: 94.7%
+       Matches below 5 px: 95.0%
+
+ℹ️  INFO Pair 4/10: 48 -> 49
+✅ PASS match_features() ran without errors.
+ℹ️  INFO Runtime: 0.082 seconds
+✅ PASS Found results_matches.csv.
+✅ PASS results_matches.csv has the expected header.
+✅ PASS results_matches.csv contains 238 match row(s).
+✅ PASS Match rows have sequential IDs and numeric coordinates.
+ℹ️  INFO Match geometry against trusted KITTI epipolar geometry:
+       Median Sampson error: 0.233 px
+       Mean Sampson error: 7.933 px
+       Matches below 1 px: 86.1%
+       Matches below 2 px: 88.2%
+       Matches below 5 px: 88.2%
+
+ℹ️  INFO Pair 5/10: 72 -> 73
+✅ PASS match_features() ran without errors.
+ℹ️  INFO Runtime: 0.080 seconds
+✅ PASS Found results_matches.csv.
+✅ PASS results_matches.csv has the expected header.
+✅ PASS results_matches.csv contains 340 match row(s).
+✅ PASS Match rows have sequential IDs and numeric coordinates.
+ℹ️  INFO Match geometry against trusted KITTI epipolar geometry:
+       Median Sampson error: 0.133 px
+       Mean Sampson error: 2.413 px
+       Matches below 1 px: 91.2%
+       Matches below 2 px: 92.9%
+       Matches below 5 px: 94.4%
+
+ℹ️  INFO Pair 6/10: 80 -> 81
+✅ PASS match_features() ran without errors.
+ℹ️  INFO Runtime: 0.078 seconds
+✅ PASS Found results_matches.csv.
+✅ PASS results_matches.csv has the expected header.
+✅ PASS results_matches.csv contains 372 match row(s).
+✅ PASS Match rows have sequential IDs and numeric coordinates.
+ℹ️  INFO Match geometry against trusted KITTI epipolar geometry:
+       Median Sampson error: 0.095 px
+       Mean Sampson error: 2.609 px
+       Matches below 1 px: 92.5%
+       Matches below 2 px: 93.5%
+       Matches below 5 px: 94.6%
+
+ℹ️  INFO Pair 7/10: 85 -> 86
+✅ PASS match_features() ran without errors.
+ℹ️  INFO Runtime: 0.112 seconds
+✅ PASS Found results_matches.csv.
+✅ PASS results_matches.csv has the expected header.
+✅ PASS results_matches.csv contains 357 match row(s).
+✅ PASS Match rows have sequential IDs and numeric coordinates.
+ℹ️  INFO Match geometry against trusted KITTI epipolar geometry:
+       Median Sampson error: 0.175 px
+       Mean Sampson error: 3.229 px
+       Matches below 1 px: 92.2%
+       Matches below 2 px: 92.7%
+       Matches below 5 px: 94.7%
+
+ℹ️  INFO Pair 8/10: 95 -> 96
+✅ PASS match_features() ran without errors.
+ℹ️  INFO Runtime: 0.078 seconds
+✅ PASS Found results_matches.csv.
+✅ PASS results_matches.csv has the expected header.
+✅ PASS results_matches.csv contains 340 match row(s).
+✅ PASS Match rows have sequential IDs and numeric coordinates.
+ℹ️  INFO Match geometry against trusted KITTI epipolar geometry:
+       Median Sampson error: 0.141 px
+       Mean Sampson error: 4.362 px
+       Matches below 1 px: 90.3%
+       Matches below 2 px: 90.9%
+       Matches below 5 px: 91.2%
+
+ℹ️  INFO Pair 9/10: 113 -> 114
+✅ PASS match_features() ran without errors.
+ℹ️  INFO Runtime: 0.073 seconds
+✅ PASS Found results_matches.csv.
+✅ PASS results_matches.csv has the expected header.
+✅ PASS results_matches.csv contains 322 match row(s).
+✅ PASS Match rows have sequential IDs and numeric coordinates.
+ℹ️  INFO Match geometry against trusted KITTI epipolar geometry:
+       Median Sampson error: 0.343 px
+       Mean Sampson error: 4.371 px
+       Matches below 1 px: 89.4%
+       Matches below 2 px: 91.0%
+       Matches below 5 px: 91.3%
+
+ℹ️  INFO Pair 10/10: 115 -> 116
+✅ PASS match_features() ran without errors.
+ℹ️  INFO Runtime: 0.079 seconds
+✅ PASS Found results_matches.csv.
+✅ PASS results_matches.csv has the expected header.
+✅ PASS results_matches.csv contains 308 match row(s).
+✅ PASS Match rows have sequential IDs and numeric coordinates.
+ℹ️  INFO Match geometry against trusted KITTI epipolar geometry:
+       Median Sampson error: 0.378 px
+       Mean Sampson error: 5.583 px
+       Matches below 1 px: 87.3%
+       Matches below 2 px: 89.3%
+       Matches below 5 px: 91.2%
+
+ℹ️  INFO Runtime summary for match_features():
+       Mean runtime: 0.090 seconds
+       Slowest pair: 0.142 seconds
+ℹ️  INFO Overall feature-match geometry summary:
+       Evaluated frame pairs: 10
+       Evaluated matches: 3176
+       Median Sampson error: 0.161 px
+       Mean Sampson error: 3.963 px
+       Matches below 1 px: 90.9%
+       Matches below 2 px: 92.1%
+       Matches below 5 px: 93.1%
+
+================================================================================
+Checking estimate_relative_pose(dataset, frame_i, frame_j)
+================================================================================
+ℹ️  INFO Checking 10 randomly selected frame pair(s).
+
+ℹ️  INFO Pair 1/10: 3 -> 4
+✅ PASS estimate_relative_pose() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL estimate_relative_pose() must create results_relative_pose.csv.
+
+ℹ️  INFO Pair 2/10: 22 -> 23
+✅ PASS estimate_relative_pose() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL estimate_relative_pose() must create results_relative_pose.csv.
+
+ℹ️  INFO Pair 3/10: 23 -> 24
+✅ PASS estimate_relative_pose() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL estimate_relative_pose() must create results_relative_pose.csv.
+
+ℹ️  INFO Pair 4/10: 48 -> 49
+✅ PASS estimate_relative_pose() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL estimate_relative_pose() must create results_relative_pose.csv.
+
+ℹ️  INFO Pair 5/10: 72 -> 73
+✅ PASS estimate_relative_pose() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL estimate_relative_pose() must create results_relative_pose.csv.
+
+ℹ️  INFO Pair 6/10: 80 -> 81
+✅ PASS estimate_relative_pose() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL estimate_relative_pose() must create results_relative_pose.csv.
+
+ℹ️  INFO Pair 7/10: 85 -> 86
+✅ PASS estimate_relative_pose() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL estimate_relative_pose() must create results_relative_pose.csv.
+
+ℹ️  INFO Pair 8/10: 95 -> 96
+✅ PASS estimate_relative_pose() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL estimate_relative_pose() must create results_relative_pose.csv.
+
+ℹ️  INFO Pair 9/10: 113 -> 114
+✅ PASS estimate_relative_pose() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL estimate_relative_pose() must create results_relative_pose.csv.
+
+ℹ️  INFO Pair 10/10: 115 -> 116
+✅ PASS estimate_relative_pose() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL estimate_relative_pose() must create results_relative_pose.csv.
+
+ℹ️  INFO Runtime summary for estimate_relative_pose():
+       Mean runtime: 0.000 seconds
+       Slowest pair: 0.000 seconds
+
+================================================================================
+Checking visual_odometry(dataset)
+================================================================================
+✅ PASS visual_odometry() ran without errors.
+ℹ️  INFO Runtime: 0.000 seconds
+❌ FAIL visual_odometry() must create results_visual_odometry.csv.
+
+================================================================================
+Summary
+================================================================================
+match_features(): PASS
+estimate_relative_pose(): FAIL
+visual_odometry(): FAIL
+
+Report written to: /home/n12658723/enn583/ckimENN583/check_student_solution_report.txt
