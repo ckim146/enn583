@@ -22,6 +22,7 @@
 
 import numpy as np
 import spatialmath as sm
+from spatialmath import SE3
 import cv2 as cv
 import pandas as pd
 import csv
@@ -105,8 +106,8 @@ def match_features(img_i: np.ndarray, img_j: np.ndarray):
     #   5. Write results_matches.csv with columns:
     #      match_id,u_i,v_i,u_j,v_j
     # ====================================================================================
-    MAX_POINTS = 500
-    sift = cv.SIFT_create(nfeatures=MAX_POINTS)
+    MAX_POINTS = 2000
+    sift = cv.SIFT_create(nfeatures=MAX_POINTS, contrastThreshold=0.02, edgeThreshold=15)
     sift_i_keypoints, sift_i_descriptors = sift.detectAndCompute(img_i, None)
     sift_j_keypoints, sift_j_descriptors = sift.detectAndCompute(img_j, None)
 
@@ -115,7 +116,7 @@ def match_features(img_i: np.ndarray, img_j: np.ndarray):
     # Conduct ratio test to refine matches
     ratio_matches = []
     for (best, second_best) in nearest_matches:         
-        if best.distance < 0.85 * second_best.distance:
+        if best.distance < 0.75 * second_best.distance:
             ratio_matches.append(best)
     
         ratio_matches = sorted(
@@ -131,9 +132,7 @@ def match_features(img_i: np.ndarray, img_j: np.ndarray):
             u_j, v_j = sift_j_keypoints[m.trainIdx].pt
             writer.writerow([match_id, u_i, v_i, u_j, v_j])
     
-    return None
-
-
+    return ratio_matches, sift_i_keypoints, sift_j_keypoints
 
 
 #  ====================================================================================
@@ -203,6 +202,94 @@ def estimate_relative_pose(dataset, frame_i: int, frame_j: int):
     #   4. Write results_relative_pose.csv with columns:
     #      frame_i,frame_j,x,y,z,roll,pitch,yaw
     # ====================================================================================
+    def ransac_iterations(inlier_ratio, sample_size, confidence=0.99):
+        """
+        Minimum number of RANSAC iterations needed to have `confidence`
+        probability of drawing at least one all-inlier minimal sample.
+    
+        inlier_ratio : estimated fraction of correspondences that are inliers (0-1)
+        sample_size  : points needed per hypothesis (e.g. 3 for P3P, 5 for five-point, 8 for eight-point)
+        confidence   : desired probability of success (default 0.99)
+        """
+        if inlier_ratio <= 0 or inlier_ratio >= 1:
+            raise ValueError("inlier_ratio must be between 0 and 1 (exclusive)")
+    
+        numerator = np.log(1 - confidence)
+        denominator = np.log(1 - inlier_ratio ** sample_size)
+        return int(np.ceil(numerator / denominator))
+
+    left_current = cv.cvtColor(dataset.stereo(frame_i)[0], cv.COLOR_RGB2GRAY)
+    right_current = cv.cvtColor(dataset.stereo(frame_i)[1], cv.COLOR_RGB2GRAY)
+    left_next = cv.cvtColor(dataset.stereo(frame_j)[0], cv.COLOR_RGB2GRAY)
+
+    stereo = cv.StereoSGBM_create(
+    minDisparity=0,
+    numDisparities=16 * 10,  # must be divisible by 16
+    blockSize=5,
+    P1=8 * 1 * 5 ** 2,   # P1: penalty for changing disparity by exactly one pixel. It discourages small fluctuations and surface noise.
+    P2=32 * 1 * 5 ** 2,  # P2: penalty for changing disparity by more than one pixel. It strongly discourages sudden depth jumps.
+    disp12MaxDiff=1,     # 1 enables the left-right consistency check.
+    uniquenessRatio=10,  # like the ratio check: Requires the best disparity candidate to be sufficiently better than competing candidates. A value of 10 means that a match must pass a roughly 10% uniqueness margin.
+    speckleWindowSize=100,  # Removes small connected regions of approximately similar disparity.
+    speckleRange=32,     # Controls how much disparity variation is permitted while determining whether pixels belong to the same speckle component.
+    preFilterCap=63,     
+    mode=cv.STEREO_SGBM_MODE_SGBM_3WAY        
+    )
+    
+    
+    # now calculate the disparity map for the current frame
+    disparity = stereo.compute(left_current, right_current).astype(np.float32) / 16.0
+
+    matches, kp_current, kp_next  = match_features(left_current, left_next)
+
+    left_calibration = dataset.camera_calibration(camera=2)
+    right_calibration = dataset.camera_calibration(camera=3)
+    K = left_calibration['K']
+
+    T_right_left = right_calibration['T_cam_imu'] @ np.linalg.inv(left_calibration['T_cam_imu'])
+    baseline = np.linalg.norm(T_right_left[:3, 3])
+    fx, fy = K[0, 0], K[1, 1]
+    cx, cy = K[0, 2], K[1, 2]
+
+    points_3d_current = []
+    points_2d_next = [] 
+
+    # Assign disparity values to matched keypoints
+    for match in matches:
+        pt_current = kp_current[match.queryIdx].pt
+        pt_next = kp_next[match.trainIdx].pt
+        u, v = int(round(pt_current[0])), int(round(pt_current[1]))
+        disparity_value = disparity[v, u]
+        if disparity_value > 0:
+            Z = (fx * baseline) / disparity_value
+            X = (pt_current[0] - cx) * Z / fx
+            Y = (pt_current[1] - cy) * Z / fy
+            points_3d_current.append([X, Y, Z])
+            points_2d_next.append([pt_next[0], pt_next[1]])
+    
+    # Use the 3d points to calculate estimated camera pose
+    T = None
+    if len(points_2d_next) >= 4:
+        points_3d = np.array(points_3d_current)
+        points_2d = np.array(points_2d_next)
+        K = dataset.camera_calibration(2)["K"]
+        N = ransac_iterations(inlier_ratio=0.5, sample_size=3, confidence=0.99)
+        ok, rvec, tvec, inliers = cv.solvePnPRansac(points_3d, points_2d, K, flags=cv.SOLVEPNP_AP3P, reprojectionError=1.25, distCoeffs=None, iterationsCount=N)
+        if ok and inliers is not None and len(inliers) >= 4:
+            idx = inliers.flatten()
+            rvec, tvec = cv.solvePnPRefineVVS(points_3d[idx], points_2d[idx], K, None, rvec, tvec)
+            T = SE3.Rt(cv.Rodrigues(rvec)[0], tvec).inv()
+    if T is None:
+        T = SE3()
+
+    # Write CSV
+    headers = ['frame_i' ,'frame_j' , 'x', 'y', 'z', 'roll' ,'pitch', 'yaw']
+    x, y, z = T.t
+    roll, pitch, yaw = T.rpy(order='zyx')
+    with open("results_relative_pose.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)  
+        writer.writerow([frame_i, frame_j, x, y, z, roll, pitch, yaw])
 
     return None
 
