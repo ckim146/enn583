@@ -26,6 +26,8 @@ from spatialmath import SE3
 import cv2 as cv
 import pandas as pd
 import csv
+import symforce
+symforce.set_epsilon_to_symbol()
 
 
 # ====================================================================================
@@ -291,7 +293,7 @@ def estimate_relative_pose(dataset, frame_i: int, frame_j: int):
         writer.writerow(headers)  
         writer.writerow([frame_i, frame_j, x, y, z, roll, pitch, yaw])
 
-    return None
+    return T
 
 #  ====================================================================================
 #  ====================================================================================
@@ -347,5 +349,53 @@ def visual_odometry(dataset):
     #   4. Write results_visual_odometry.csv with columns:
     #      frame,x,y,z,roll,pitch,yaw
     # ====================================================================================
+    data = dataset
+    T_cam_imu_matrix = data.camera_calibration(camera=2)['T_cam_imu']
+    T_cam_imu = SE3.Rt(T_cam_imu_matrix[:3, :3], T_cam_imu_matrix[:3, 3], check=False) 
 
+    relative_motion = []
+
+    left_calibration = data.camera_calibration(camera=2)
+    right_calibration = data.camera_calibration(camera=3)
+    K = left_calibration['K']
+    
+    T_right_left = right_calibration['T_cam_imu'] @ np.linalg.inv(left_calibration['T_cam_imu'])
+    baseline = np.linalg.norm(T_right_left[:3, 3])
+    fx, fy = K[0, 0], K[1, 1]
+    cx, cy = K[0, 2], K[1, 2]
+    
+    # Estimate motion across consecutive frames.
+    relative_motion = [
+        estimate_relative_pose(data, i, i + 1)
+        for i in range(data.frame_count - 1)
+    ]
+    # Estimate motion across non-consecutive frames to supplement the consecutive estimation.
+    additional_edges = [(i, i + 3) for i in range(data.frame_count - 3)]
+    additional_measurements_raw = [
+        estimate_relative_pose(data, a, b) for a, b in additional_edges
+    ]
+    
+    estimated_trajectory = [SE3()]
+    
+    # Convert to imu frame to be comparible with ground truth motion
+    for T in relative_motion:
+        relative_motion_in_imu_frame = T_cam_imu.inv() @ T @ T_cam_imu
+        estimated_trajectory.append(estimated_trajectory[-1] @ relative_motion_in_imu_frame)
+    
+        # convert to numpy array for plotting
+        # estimated_trajectory = np.array([pose.t for pose in estimated_trajectory])
+    
+        # ground_truth_trajectory = [data.ground_truth_pose(frame) for frame in range(data.frame_count)]
+        # ground_truth_positions = np.array([pose.t for pose in ground_truth_trajectory])
+    
+        # Write CSV
+        headers = ['frame', 'x', 'y', 'z', 'roll' ,'pitch', 'yaw']
+        with open("results_visual_odometry.csv", "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            for frame, pose in enumerate(estimated_trajectory):
+                x, y, z = pose.t
+                roll, pitch, yaw = pose.rpy(order='zyx')
+                writer.writerow([frame, x, y, z, roll, pitch, yaw])
+    
     return None
