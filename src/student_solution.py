@@ -379,8 +379,9 @@ def visual_odometry(dataset):
     
     # Convert to imu frame to be comparible with ground truth motion
     for T in relative_motion:
-        relative_motion_in_imu_frame = T_cam_imu.inv() @ T @ T_cam_imu
-        estimated_trajectory.append(estimated_trajectory[-1] @ relative_motion_in_imu_frame)
+        # relative_motion_in_imu_frame = T_cam_imu.inv() @ T @ T_cam_imu
+        # estimated_trajectory.append(estimated_trajectory[-1] @ relative_motion_in_imu_frame)
+        estimated_trajectory.append(estimated_trajectory[-1] @ T)
     
         # convert to numpy array for plotting
         # estimated_trajectory = np.array([pose.t for pose in estimated_trajectory])
