@@ -27,6 +27,8 @@ import cv2 as cv
 import pandas as pd
 import csv
 import symforce
+from scipy.optimize import least_squares
+from scipy.sparse import lil_matrix
 symforce.set_epsilon_to_symbol()
 
 
@@ -108,7 +110,7 @@ def match_features(img_i: np.ndarray, img_j: np.ndarray):
     #   5. Write results_matches.csv with columns:
     #      match_id,u_i,v_i,u_j,v_j
     # ====================================================================================
-    MAX_POINTS = 2000
+    MAX_POINTS = 3000
     sift = cv.SIFT_create(nfeatures=MAX_POINTS, contrastThreshold=0.02, edgeThreshold=15)
     sift_i_keypoints, sift_i_descriptors = sift.detectAndCompute(img_i, None)
     sift_j_keypoints, sift_j_descriptors = sift.detectAndCompute(img_j, None)
@@ -118,7 +120,7 @@ def match_features(img_i: np.ndarray, img_j: np.ndarray):
     # Conduct ratio test to refine matches
     ratio_matches = []
     for (best, second_best) in nearest_matches:         
-        if best.distance < 0.75 * second_best.distance:
+        if best.distance < 0.55 * second_best.distance:
             ratio_matches.append(best)
     
         ratio_matches = sorted(
@@ -262,7 +264,7 @@ def estimate_relative_pose(dataset, frame_i: int, frame_j: int):
         pt_next = kp_next[match.trainIdx].pt
         u, v = int(round(pt_current[0])), int(round(pt_current[1]))
         disparity_value = disparity[v, u]
-        if disparity_value > 0:
+        if disparity_value > 4.0:
             Z = (fx * baseline) / disparity_value
             X = (pt_current[0] - cx) * Z / fx
             Y = (pt_current[1] - cy) * Z / fy
@@ -275,7 +277,8 @@ def estimate_relative_pose(dataset, frame_i: int, frame_j: int):
         points_3d = np.array(points_3d_current)
         points_2d = np.array(points_2d_next)
         K = dataset.camera_calibration(2)["K"]
-        N = ransac_iterations(inlier_ratio=0.5, sample_size=3, confidence=0.99)
+        N = ransac_iterations(inlier_ratio=0.50, sample_size=3, confidence=0.99)
+
         ok, rvec, tvec, inliers = cv.solvePnPRansac(points_3d, points_2d, K, flags=cv.SOLVEPNP_AP3P, reprojectionError=1.25, distCoeffs=None, iterationsCount=N)
         if ok and inliers is not None and len(inliers) >= 4:
             idx = inliers.flatten()
@@ -283,7 +286,7 @@ def estimate_relative_pose(dataset, frame_i: int, frame_j: int):
             T = SE3.Rt(cv.Rodrigues(rvec)[0], tvec).inv()
     if T is None:
         T = SE3()
-
+    # print("N: ", N, len(points_2d_next))
     # Write CSV
     headers = ['frame_i' ,'frame_j' , 'x', 'y', 'z', 'roll' ,'pitch', 'yaw']
     x, y, z = T.t
