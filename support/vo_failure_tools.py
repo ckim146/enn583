@@ -29,7 +29,8 @@ def load_diagnostics(path=DIAGNOSTICS_CSV):
 
 def plot_trajectory_colored(student_poses, gt_poses, frame_err, rejected_frames=(),
                             err_label="Frame-to-frame rotation error [deg]",
-                            save_path="results_vo_trajectory_error.png", title=None):
+                            save_path="results_vo_trajectory_error.png", title=None,
+                            cmap="viridis", vmin=None, vmax=None, line_label=None):
     """Bird's-eye (x-z, camera frame) trajectory. Segment k (pose k -> k+1) is
     colored by frame_err[k]. Rejected frames are marked with red crosses."""
     est = np.array([np.asarray(p.t).ravel() for p in student_poses])
@@ -41,18 +42,22 @@ def plot_trajectory_colored(student_poses, gt_poses, frame_err, rejected_frames=
 
     pts = est[:, [0, 2]]
     segments = np.stack([pts[:-1], pts[1:]], axis=1)
-    vmax = max(np.percentile(frame_err, 99), 1e-9)  # one spike shouldn't wash out the scale
-    lc = LineCollection(segments, cmap="viridis", norm=plt.Normalize(0, vmax), lw=2.5)
+    if vmin is None:
+        vmin = 0.0
+    if vmax is None:
+        vmax = max(np.percentile(frame_err, 99), vmin + 1e-9)  # one spike shouldn't wash out the scale
+    lc = LineCollection(segments, cmap=cmap, norm=plt.Normalize(vmin, vmax), lw=2.5)
     lc.set_array(frame_err)
     ax.add_collection(lc)
-    fig.colorbar(lc, ax=ax, label=err_label, extend="max")
+    fig.colorbar(lc, ax=ax, label=err_label, extend="both")
 
     if len(rejected_frames):
         r = np.asarray(rejected_frames)
         ax.scatter(est[r, 0], est[r, 2], marker="x", c="red", s=45, zorder=3,
                    label=f"Rejected estimates ({len(r)})")
     ax.scatter(gt[0, 0], gt[0, 2], marker="o", c="black", s=50, zorder=4, label="Start")
-    ax.plot([], [], color=plt.cm.viridis(0.7), lw=2.5, label="Estimate (colored by error)")
+    ax.plot([], [], color=plt.get_cmap(cmap)(0.7), lw=2.5,
+            label=line_label or "Estimate (colored by error)")
 
     ax.set_xlabel("x [m]")
     ax.set_ylabel("z (forward) [m]")
@@ -185,3 +190,24 @@ def blur_profile(images_dataset, n_frames, step=1):
     frames = np.arange(0, n_frames, step)
     return frames, np.array([blur_score(np.asarray(images_dataset.stereo(int(f))[0]))
                              for f in frames])
+
+
+def plot_inliers_and_error_vs_frame(n_inliers, heading_err_deg,
+                                    save_path="results_vo_inliers_vs_error.png"):
+    """Two stacked panels sharing the frame axis: PnP inliers (top) and
+    |heading error| (bottom). Shows whether error spikes line up with inlier dips."""
+    frames = np.arange(len(n_inliers))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5.5), sharex=True)
+    ax1.plot(frames, n_inliers, lw=1.2)
+    ax1.set_ylabel("PnP inliers")
+    ax1.grid(alpha=0.3)
+    ax2.plot(frames, np.abs(heading_err_deg), lw=1.2, color="tab:red")
+    ax2.set_ylabel("|Heading error| [deg]")
+    ax2.set_xlabel("Frame pair index (k \u2192 k+1)")
+    ax2.grid(alpha=0.3)
+    r = np.corrcoef(n_inliers, np.abs(heading_err_deg))[0, 1]
+    ax1.set_title(f"Inliers vs. heading error per frame pair (Pearson r = {r:.2f})")
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=200)
+    plt.close(fig)
+    return save_path, r

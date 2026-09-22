@@ -63,7 +63,7 @@ from vo_failure_tools import (
 )
 
 
-solution = importlib.import_module("student_solution_eval")
+solution = importlib.import_module("student_solution")
 
 
 MIN_TRANSLATION_FOR_PERCENT_ERROR = 0.05
@@ -699,6 +699,22 @@ def check_visual_odometry(dataset, full_dataset) -> bool:
             print(f"       Spikes NOT rejected by the pipeline (silent failures): "
                   f"pairs {silent}")
 
+        # Per-frame errors for plot_diagnostics.py (needs ground truth, so written here)
+        with open("results_vo_errors.csv", "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["frame", "position_error_m", "frame_trans_err_m",
+                             "frame_trans_err_pct", "frame_rot_err_deg"])
+            for k in range(len(student_poses)):
+                if k == 0:
+                    writer.writerow([k, pos_err[k], "", "", ""])
+                    continue
+                step = float(np.linalg.norm(
+                    ground_truth_poses_relative_to_frame_zero[k].t
+                    - ground_truth_poses_relative_to_frame_zero[k - 1].t))
+                pct = 100.0 * trans_err[k - 1] / step if step > 0.1 else float("nan")
+                writer.writerow([k, pos_err[k], trans_err[k - 1], pct, rot_err[k - 1]])
+        print("[INFO] Wrote per-frame errors to results_vo_errors.csv.")
+
         plot_path = plot_trajectory_colored(
             student_poses,
             ground_truth_poses_relative_to_frame_zero,
@@ -836,7 +852,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--solution-module",
-        default="student_solution_eval",
+        default="student_solution",
         help=(
             "Python module containing match_features(), estimate_relative_pose(), "
             "and visual_odometry(). Defaults to student_solution."
