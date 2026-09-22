@@ -49,18 +49,9 @@ from checker_utils import (
     trusted_fundamental_matrix,
     warn_if_angles_look_like_degrees,
 )
-from vo_failure_tools import (
-    DIAGNOSTICS_CSV,
-    FIRST_FAILURE_NPZ,
-    load_diagnostics,
-    plot_trajectory_colored,
-    show_first_failure,
-    spike_frames,
-    worst_region,
-)
 
 
-solution = importlib.import_module("student_solution_eval")
+solution = importlib.import_module("student_solution")
 
 
 MIN_TRANSLATION_FOR_PERCENT_ERROR = 0.05
@@ -401,8 +392,6 @@ def check_visual_odometry(dataset, full_dataset) -> bool:
     print("=" * 80)
 
     output_file = remove_old_file("results_visual_odometry.csv")
-    remove_old_file(DIAGNOSTICS_CSV)
-    remove_old_file(FIRST_FAILURE_NPZ)
 
     # The full VO function should process the whole dataset it is given.
     start = time.perf_counter()
@@ -496,7 +485,6 @@ def check_visual_odometry(dataset, full_dataset) -> bool:
     translation_squared_errors = []
     rotation_squared_errors = []
     rotation_squared_errors_if_degrees = []
-    position_errors = []  # ||p_est - p_gt|| per frame, for ATE / final error / drift
     for student_pose, student_pose_if_degrees, ground_truth_pose in zip(
         student_poses,
         student_poses_if_degrees,
@@ -507,7 +495,6 @@ def check_visual_odometry(dataset, full_dataset) -> bool:
         rotation_squared_errors.extend(
             value * value for value in pose_error.rpy(order="zyx")
         )
-        position_errors.append(float(np.linalg.norm(pose_error.t)))
 
         pose_error_if_degrees = ground_truth_pose.inv() @ student_pose_if_degrees
         rotation_squared_errors_if_degrees.extend(
@@ -547,9 +534,6 @@ def check_visual_odometry(dataset, full_dataset) -> bool:
         relative_rotation_squared_errors = []
         relative_translation_percentage_errors = []
         relative_rotation_percentage_errors = []
-        frame_rotation_errors_deg = []    # one value per frame pair (k -> k+1)
-        frame_translation_errors_m = []
-        frame_heading_errors_deg = []     # signed, about camera y (vertical) axis
         for frame in range(len(student_poses) - 1):
             student_relative_pose = student_poses[frame].inv() @ student_poses[frame + 1]
             ground_truth_relative_pose = (
@@ -577,11 +561,6 @@ def check_visual_odometry(dataset, full_dataset) -> bool:
                 relative_rotation_percentage_errors.append(
                     100.0 * rotation_error / actual_rotation
                 )
-
-            frame_rotation_errors_deg.append(math.degrees(rotation_error))
-            frame_translation_errors_m.append(translation_error)
-            theta, axis = relative_pose_error.angvec()
-            frame_heading_errors_deg.append(math.degrees(theta * axis[1]))
 
         relative_translation_rmse = math.sqrt(
             sum(relative_translation_squared_errors)
@@ -640,74 +619,6 @@ def check_visual_odometry(dataset, full_dataset) -> bool:
             f"({relative_rotation_rmse_deg_med:.3f} deg)"
         )
 
-        # ---------------------------------------------------------------
-        # Failure analysis (report table + figures)
-        # ---------------------------------------------------------------
-        diagnostics = load_diagnostics()
-        rejected = [r for r in diagnostics if r["accepted"] == "0"]
-        rejected_frames = [int(r["frame_j"]) for r in rejected
-                           if int(r["frame_j"]) < len(student_poses)]
-
-        rot_err = np.asarray(frame_rotation_errors_deg)
-        trans_err = np.asarray(frame_translation_errors_m)
-        heading = np.asarray(frame_heading_errors_deg)
-        pos_err = np.asarray(position_errors)
-        path_length = sum(
-            float(np.linalg.norm(
-                ground_truth_poses_relative_to_frame_zero[k + 1].t
-                - ground_truth_poses_relative_to_frame_zero[k].t))
-            for k in range(len(student_poses) - 1)
-        )
-        start, end, growth = worst_region(pos_err)
-        worst_pair = int(np.argmax(rot_err))
-        rot_spikes = spike_frames(rot_err)
-        trans_spikes = spike_frames(trans_err)
-
-        print("[INFO] Failure analysis (values for the report table):")
-        print(f"       Frames processed: {len(student_poses)}")
-        if diagnostics:
-            print(f"       Rejected frame-to-frame estimates: {len(rejected)} "
-                  f"of {len(diagnostics)}")
-        else:
-            print(f"       Rejected estimates: unknown ({DIAGNOSTICS_CSV} not written)")
-        print(f"       Final trajectory error: {pos_err[-1]:.3f} m "
-              f"({100 * pos_err[-1] / max(path_length, 1e-9):.2f}% of "
-              f"{path_length:.1f} m path)")
-        print(f"       ATE (RMSE of position error): "
-              f"{math.sqrt(np.mean(pos_err ** 2)):.3f} m")
-        print(f"       Median frame-to-frame rotation error: {np.median(rot_err):.4f} deg")
-        print(f"       Median frame-to-frame translation error: "
-              f"{np.median(trans_err):.4f} m")
-        print(f"       Worst single pair (rotation): {worst_pair} -> {worst_pair + 1} "
-              f"({rot_err[worst_pair]:.3f} deg)")
-        print(f"       Fastest error growth: frames {start}-{end} "
-              f"(+{growth:.3f} m)")
-        print(f"       Error spikes (> median + 5 MAD): rotation at pairs "
-              f"{rot_spikes.tolist()}, translation at pairs {trans_spikes.tolist()}")
-        print(f"       Signed heading error: mean {heading.mean():+.4f} deg, "
-              f"std {heading.std():.4f} deg "
-              "(|mean| large vs std suggests systematic bias)")
-
-        silent = sorted(set(rot_spikes.tolist()) | set(trans_spikes.tolist()))
-        silent = [k for k in silent if (k + 1) not in rejected_frames]
-        if silent:
-            print(f"       Spikes NOT rejected by the pipeline (silent failures): "
-                  f"pairs {silent}")
-
-        plot_path = plot_trajectory_colored(
-            student_poses,
-            ground_truth_poses_relative_to_frame_zero,
-            rot_err,
-            rejected_frames,
-        )
-        print(f"[INFO] Wrote error-colored trajectory to {plot_path}.")
-
-        failure_plot = show_first_failure(full_dataset)
-        if failure_plot:
-            print(f"[INFO] Wrote first rejected frame pair to {failure_plot}.")
-        else:
-            print(f"[INFO] No rejected frame pair ({FIRST_FAILURE_NPZ} not written).")
-
     return function_ran
 
 
@@ -716,7 +627,6 @@ def check_visual_odometry(dataset, full_dataset) -> bool:
 # ====================================================================================
 # ====================================================================================
 def main() -> None:
-
     """Parse command-line options, load KITTI, and run the three checks."""
 
     parser = argparse.ArgumentParser(
@@ -776,7 +686,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--solution-module",
-        default="student_solution_eval",
+        default="student_solution",
         help=(
             "Python module containing match_features(), estimate_relative_pose(), "
             "and visual_odometry(). Defaults to student_solution."

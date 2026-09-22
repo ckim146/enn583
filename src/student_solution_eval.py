@@ -192,10 +192,8 @@ def match_features(img_i: np.ndarray, img_j: np.ndarray):
     for (best, second_best) in nearest_matches:         
         if best.distance < 0.55 * second_best.distance:
             ratio_matches.append(best)
-    
-        ratio_matches = sorted(
-            ratio_matches, key=lambda match: match.distance
-        )
+
+    ratio_matches = sorted(ratio_matches, key=lambda match: match.distance)
     # Initialize df to be turned into a CSV later
     headers = ["match_id", "u_i", "v_i", "u_j", "v_j"]
     with open("results_matches.csv", "w", newline="") as f:
@@ -326,7 +324,8 @@ def estimate_relative_pose(dataset, frame_i: int, frame_j: int, return_info=Fals
     cx, cy = K[0, 2], K[1, 2]
 
     points_3d_current = []
-    points_2d_next = [] 
+    points_2d_next = []
+    pts_i_used = []   # pixels in frame_i of the points that got a valid depth
 
     # Assign disparity values to matched keypoints
     for match in matches:
@@ -340,13 +339,15 @@ def estimate_relative_pose(dataset, frame_i: int, frame_j: int, return_info=Fals
             Y = (pt_current[1] - cy) * Z / fy
             points_3d_current.append([X, Y, Z])
             points_2d_next.append([pt_next[0], pt_next[1]])
+            pts_i_used.append([pt_current[0], pt_current[1]])
     
     # Use the 3d points to calculate estimated camera pose
     T = None
+    inliers = None
+    points_3d = np.array(points_3d_current, dtype=np.float64).reshape(-1, 3)
+    points_2d = np.array(points_2d_next, dtype=np.float64).reshape(-1, 2)
+    pts_i_used = np.array(pts_i_used, dtype=np.float64).reshape(-1, 2)
     if len(points_2d_next) >= 4:
-        points_3d = np.array(points_3d_current)
-        points_2d = np.array(points_2d_next)
-        K = dataset.camera_calibration(2)["K"]
         N = ransac_iterations(inlier_ratio=0.50, sample_size=3, confidence=0.99)
 
         ok, rvec, tvec, inliers = cv.solvePnPRansac(points_3d, points_2d, K, flags=cv.SOLVEPNP_AP3P, reprojectionError=1.25, distCoeffs=None, iterationsCount=N)
@@ -354,8 +355,9 @@ def estimate_relative_pose(dataset, frame_i: int, frame_j: int, return_info=Fals
             idx = inliers.flatten()
             rvec, tvec = cv.solvePnPRefineVVS(points_3d[idx], points_2d[idx], K, None, rvec, tvec)
             T = SE3.Rt(cv.Rodrigues(rvec)[0], tvec).inv()
+    pnp_succeeded = T is not None
     if T is None:
-        T = SE3()
+        T = SE3()   # identity only for the CSV / plain callers
     # print("N: ", N, len(points_2d_next))
     # Write CSV
     headers = ['frame_i' ,'frame_j' , 'x', 'y', 'z', 'roll' ,'pitch', 'yaw']
@@ -366,18 +368,19 @@ def estimate_relative_pose(dataset, frame_i: int, frame_j: int, return_info=Fals
         writer.writerow(headers)  
         writer.writerow([frame_i, frame_j, x, y, z, roll, pitch, yaw])
 
-    # return T
     inlier_mask = np.zeros(len(points_2d), bool)
-    if inliers is not None:
-       inlier_mask[inliers.ravel()] = True
+    if pnp_succeeded and inliers is not None:
+        inlier_mask[inliers.ravel()] = True
     info = dict(
-       n_matches=len(matches),       # all matches before depth filtering
-       n_points_3d=len(points_3d),   # matches with valid disparity
-       pts_i=pts_i_used,             # (N,2) pixels in frame_i of those points
-       pts_j=points_2d,              # (N,2) matching pixels in frame_j
-       inlier_mask=inlier_mask,
+        n_matches=len(matches),       # all matches before depth filtering
+        n_points_3d=len(points_3d),   # matches with valid disparity
+        pts_i=pts_i_used,             # (N,2) pixels in frame_i of those points
+        pts_j=points_2d,              # (N,2) matching pixels in frame_j
+        inlier_mask=inlier_mask,
     )
-    return (T, info) if return_info else T
+    if return_info:
+        return (T if pnp_succeeded else None), info
+    return T
 
 #  ====================================================================================
 #  ====================================================================================
@@ -470,21 +473,15 @@ def visual_odometry(dataset):
         # relative_motion_in_imu_frame = T_cam_imu.inv() @ T @ T_cam_imu
         # estimated_trajectory.append(estimated_trajectory[-1] @ relative_motion_in_imu_frame)
         estimated_trajectory.append(estimated_trajectory[-1] @ T)
-    
-        # convert to numpy array for plotting
-        # estimated_trajectory = np.array([pose.t for pose in estimated_trajectory])
-    
-        # ground_truth_trajectory = [data.ground_truth_pose(frame) for frame in range(data.frame_count)]
-        # ground_truth_positions = np.array([pose.t for pose in ground_truth_trajectory])
-    
-        # Write CSV
-        headers = ['frame', 'x', 'y', 'z', 'roll' ,'pitch', 'yaw']
-        with open("results_visual_odometry.csv", "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(headers)
-            for frame, pose in enumerate(estimated_trajectory):
-                x, y, z = pose.t
-                roll, pitch, yaw = pose.rpy(order='zyx')
-                writer.writerow([frame, x, y, z, roll, pitch, yaw])
+
+    # Write CSV (once, after the whole trajectory is chained)
+    headers = ['frame', 'x', 'y', 'z', 'roll' ,'pitch', 'yaw']
+    with open("results_visual_odometry.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for frame, pose in enumerate(estimated_trajectory):
+            x, y, z = pose.t
+            roll, pitch, yaw = pose.rpy(order='zyx')
+            writer.writerow([frame, x, y, z, roll, pitch, yaw])
     
     return None

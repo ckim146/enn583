@@ -23,6 +23,7 @@ from pathlib import Path
 import sys
 import time
 import statistics
+import matplotlib.pyplot as plt
 
 import numpy as np
 import spatialmath as sm
@@ -57,6 +58,8 @@ from vo_failure_tools import (
     show_first_failure,
     spike_frames,
     worst_region,
+    show_frame_pair,
+    blur_profile,
 )
 
 
@@ -220,6 +223,7 @@ def check_estimate_relative_pose(dataset, full_dataset, frame_pairs) -> bool:
     translation_percentage_errors = []
     rotation_percentage_errors = []
     valid_pose_rows = []
+    frame_gt_rotation_deg = []
 
     # The full KITTI dataset has ground truth. The restricted dataset passed to
     # student code below does not.
@@ -231,6 +235,7 @@ def check_estimate_relative_pose(dataset, full_dataset, frame_pairs) -> bool:
         full_dataset.camera_calibration(camera=2)["T_cam_imu"],
         check=False,
     )
+    
 
     for pair_number, (frame_i, frame_j) in enumerate(frame_pairs, start=1):
         print(f"\n[INFO] Pair {pair_number}/{len(frame_pairs)}: {frame_i} -> {frame_j}")
@@ -323,6 +328,7 @@ def check_estimate_relative_pose(dataset, full_dataset, frame_pairs) -> bool:
 
         actual_rotation = rotation_angle_rad(ground_truth_relative_pose)
         rotation_error = rotation_angle_rad(pose_error)
+        frame_gt_rotation_deg.append(math.degrees(actual_rotation))  
         if actual_rotation >= MIN_ROTATION_FOR_PERCENT_ERROR:
             rotation_percentage_errors.append(100.0 * rotation_error / actual_rotation)
 
@@ -702,11 +708,41 @@ def check_visual_odometry(dataset, full_dataset) -> bool:
         )
         print(f"[INFO] Wrote error-colored trajectory to {plot_path}.")
 
+        # Visualise the worst pair: re-run the student's estimator on it to get the matches
+        try:
+            _, pair_info = solution.estimate_relative_pose(
+                dataset, worst_pair, worst_pair + 1, return_info=True
+            )
+            pair_plot = show_frame_pair(
+                full_dataset, worst_pair, worst_pair + 1, pair_info,
+                title_note=f"rotation error {rot_err[worst_pair]:.3f} deg",
+            )
+            print(f"[INFO] Wrote worst frame pair to {pair_plot}.")
+
+            frames, blur = blur_profile(full_dataset, len(student_poses))
+            k = int(np.flatnonzero(frames == worst_pair)[0])
+            print(f"       Blur score at frame {worst_pair}: {blur[k]:.0f} "
+                  f"(sequence median {np.median(blur):.0f}, "
+                  f"min {blur.min():.0f} at frame {frames[np.argmin(blur)]})")
+        except Exception as exc:
+            print(f"[INFO] Could not plot worst frame pair: {exc}")
+
         failure_plot = show_first_failure(full_dataset)
         if failure_plot:
             print(f"[INFO] Wrote first rejected frame pair to {failure_plot}.")
         else:
             print(f"[INFO] No rejected frame pair ({FIRST_FAILURE_NPZ} not written).")
+
+        fig, ax = plt.subplots(figsize=(6, 5))
+        ax.scatter(frame_gt_rotation_deg, frame_heading_errors_deg, s=8)
+        ax.axhline(0, color="k", lw=0.8)
+        ax.set_xlabel("True frame-to-frame rotation [deg]")
+        ax.set_ylabel("Signed heading error [deg]")
+        ax.set_title("Heading error vs. turn rate")
+        fig.tight_layout()
+        fig.savefig("results_vo_rot_err_vs_rotation.png", dpi=200)
+        plt.close(fig)
+        print("[INFO] Wrote heading error vs. rotation to results_vo_rot_err_vs_rotation.png.")
 
     return function_ran
 
@@ -716,7 +752,6 @@ def check_visual_odometry(dataset, full_dataset) -> bool:
 # ====================================================================================
 # ====================================================================================
 def main() -> None:
-
     """Parse command-line options, load KITTI, and run the three checks."""
 
     parser = argparse.ArgumentParser(
