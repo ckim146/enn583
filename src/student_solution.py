@@ -46,77 +46,7 @@ symforce.set_epsilon_to_symbol()
 # Start with the match_features function, then implement estimate_relative_pose, and finally implement visual_odometry.
 # You can and should reuse the functions, i.e. call match_features from estimate_relative_pose, and call estimate_relative_pose from visual_odometry.
 
-FAIL_THRESH = dict(
-    min_matches=100,       # feature matches between frame i and j
-    min_points_3d=50,      # matches with valid stereo depth
-    min_inliers=30,        # PnP RANSAC inliers
-    min_inlier_ratio=0.3,  # inliers / 3D points
-    max_rot_deg=10.0,      # a car at 10 Hz rarely turns more than this per frame
-    max_trans_m=4.0,       # ~144 km/h at 10 Hz; KITTI is well below this
-)
 
-def check_estimate(T, info, th=FAIL_THRESH):
-    """Sanity-check one PnP estimate. Returns (ok, reasons, metrics)."""
-    n_pts = int(info.get("n_points_3d", 0))
-    n_inl = int(np.count_nonzero(info.get("inlier_mask", [])))
-    if T is not None:
-        rot = float(np.degrees(np.arccos(np.clip((np.trace(T.R) - 1) / 2, -1, 1))))
-        trans = float(np.linalg.norm(T.t))
-    else:
-        rot = trans = float("nan")
-    m = dict(n_matches=int(info.get("n_matches", 0)), n_points_3d=n_pts,
-             n_inliers=n_inl, inlier_ratio=n_inl / n_pts if n_pts else 0.0,
-             rot_deg=rot, trans_m=trans)
- 
-    r = []
-    if T is None:
-        r.append("PnP failed to return a pose")
-    if m["n_matches"] < th["min_matches"]:
-        r.append(f"Too few matches: {m['n_matches']} < {th['min_matches']}")
-    if n_pts < th["min_points_3d"]:
-        r.append(f"Too few points with valid depth: {n_pts} < {th['min_points_3d']}")
-    if n_inl < th["min_inliers"]:
-        r.append(f"Too few PnP inliers: {n_inl} < {th['min_inliers']}")
-    if m["inlier_ratio"] < th["min_inlier_ratio"]:
-        r.append(f"Low PnP inlier ratio: {m['inlier_ratio']:.2f} < {th['min_inlier_ratio']}")
-    if rot > th["max_rot_deg"]:
-        r.append(f"Implausible rotation: {rot:.1f} deg > {th['max_rot_deg']} deg")
-    if trans > th["max_trans_m"]:
-        r.append(f"Implausible translation: {trans:.2f} m > {th['max_trans_m']} m")
-    return len(r) == 0, r, m
-
-def build_consecutive_motions(dataset):
-    relative_motion = []
-    diag_rows = []
-    last_good = SE3()          # constant-velocity fallback; identity at start
-    first_failure_saved = False
- 
-    for i in range(dataset.frame_count - 1):
-        T, info = estimate_relative_pose(dataset, i, i + 1, return_info=True)
-        ok, reasons, m = check_estimate(T, info)
- 
-        if ok:
-            last_good = T
-        else:
-            print(f"WARNING: {i}->{i + 1} rejected: {'; '.join(reasons)}")
-            T = last_good
-            if not first_failure_saved:
-                np.savez("results_first_failure.npz", frame_i=i, frame_j=i + 1,
-                         pts_i=np.asarray(info.get("pts_i", np.empty((0, 2)))),
-                         pts_j=np.asarray(info.get("pts_j", np.empty((0, 2)))),
-                         inlier_mask=np.asarray(info.get("inlier_mask", []), bool),
-                         reasons=np.array(reasons))
-                first_failure_saved = True
- 
-        relative_motion.append(T)
-        diag_rows.append([i, i + 1, int(ok), *m.values(), "; ".join(reasons)])
- 
-    with open("results_vo_diagnostics.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["frame_i", "frame_j", "accepted", "n_matches", "n_points_3d",
-                    "n_inliers", "inlier_ratio", "rot_deg", "trans_m", "reasons"])
-        w.writerows(diag_rows)
-    return relative_motion
 
 #  ====================================================================================
 #  ====================================================================================
@@ -211,7 +141,7 @@ def match_features(img_i: np.ndarray, img_j: np.ndarray):
 
 #  ====================================================================================
 #  ====================================================================================
-def estimate_relative_pose(dataset, frame_i: int, frame_j: int, return_info=False):
+def estimate_relative_pose(dataset, frame_i: int, frame_j: int):
     """Estimate the relative camera pose between two dataset frames.
 
     This is the frame-to-frame motion-estimation stage of the visual odometry
@@ -366,18 +296,7 @@ def estimate_relative_pose(dataset, frame_i: int, frame_j: int, return_info=Fals
         writer.writerow(headers)  
         writer.writerow([frame_i, frame_j, x, y, z, roll, pitch, yaw])
 
-    # return T
-    inlier_mask = np.zeros(len(points_2d), bool)
-    if inliers is not None:
-       inlier_mask[inliers.ravel()] = True
-    info = dict(
-       n_matches=len(matches),       # all matches before depth filtering
-       n_points_3d=len(points_3d),   # matches with valid disparity
-       pts_i=pts_i_used,             # (N,2) pixels in frame_i of those points
-       pts_j=points_2d,              # (N,2) matching pixels in frame_j
-       inlier_mask=inlier_mask,
-    )
-    return (T, info) if return_info else T
+    return T
 
 #  ====================================================================================
 #  ====================================================================================
@@ -449,14 +368,10 @@ def visual_odometry(dataset):
     cx, cy = K[0, 2], K[1, 2]
     
     # Estimate motion across consecutive frames.
-    # relative_motion = [
-    #     estimate_relative_pose(data, i, i + 1)
-    #     for i in range(data.frame_count - 1)
-    # ]
-
-    # New relative motion for eval purposes
-    relative_motion = build_consecutive_motions(dataset)
-    
+    relative_motion = [
+        estimate_relative_pose(data, i, i + 1)
+        for i in range(data.frame_count - 1)
+    ]
     # Estimate motion across non-consecutive frames to supplement the consecutive estimation.
     additional_edges = [(i, i + 3) for i in range(data.frame_count - 3)]
     additional_measurements_raw = [

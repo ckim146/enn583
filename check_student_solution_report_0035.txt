@@ -312,3 +312,20 @@ estimate_relative_pose(): PASS
 visual_odometry(): PASS
 
 Report written to: /home/n12658723/enn583/ckimENN583/check_student_solution_report.txt
+
+ℹ️  INFO Runtime: 82.282 seconds
+✅ PASS Found results_visual_odometry.csv.
+✅ PASS results_visual_odometry.csv has the expected header.
+✅ PASS results_visual_odometry.csv contains 131 pose row(s).
+✅ PASS Trajectory rows have sequential frame IDs and numeric poses.
+ℹ️  INFO Wrote trajectory comparison plot to results_visual_odometry_comparison.png.
+ℹ️  INFO Trajectory comparison against KITTI ground truth:
+       Evaluated frames: 131
+       Translation RMSE: 0.912572 m
+       Rotation RMSE: 0.012774 rad (0.732 deg)
+ℹ️  INFO Average frame-to-frame relative pose error:
+       Evaluated frame pairs: 130
+       Translation RMSE: 0.019527 m
+       Rotation RMSE: 0.000596 rad (0.034 deg)
+       Translation error: 6.28% of actual frame-to-frame motion over 130 moving pair(s)
+       Rotation error: 11.54% of actual frame-to-frame rotation over 121 rotating pair(s)
